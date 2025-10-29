@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fayl İdarəetmə Sistemi</title>
+    <title>Paylaşılan Fayl Sistemi</title>
     <style>
         * {
             margin: 0;
@@ -26,9 +26,16 @@
         h1 {
             color: white;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 10px;
             font-size: 2.5em;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .subtitle {
+            color: rgba(255,255,255,0.9);
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 1.1em;
         }
 
         .upload-section {
@@ -100,12 +107,34 @@
             color: #333;
         }
 
+        .header-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
         .files-count {
             background: #667eea;
             color: white;
             padding: 5px 15px;
             border-radius: 20px;
             font-size: 0.9em;
+        }
+
+        .refresh-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .refresh-btn:hover {
+            background: #218838;
+            transform: scale(1.05);
         }
 
         .files-grid {
@@ -145,6 +174,13 @@
             font-size: 0.85em;
             color: #666;
             margin-bottom: 3px;
+        }
+
+        .file-uploader {
+            font-size: 0.85em;
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 5px;
         }
 
         .file-actions {
@@ -199,66 +235,98 @@
             font-size: 1.2em;
         }
 
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.1em;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification.success {
+            border-left: 4px solid #28a745;
+        }
+
+        .notification.error {
+            border-left: 4px solid #ff6b6b;
+        }
+
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateX(100%);
             }
             to {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateX(0);
             }
         }
 
-        .file-card {
-            animation: slideIn 0.3s ease;
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📁 Fayl İdarəetmə Sistemi</h1>
+        <h1>📁 Paylaşılan Fayl Sistemi</h1>
+        <div class="subtitle">🌍 Hər kəsin yüklədiyi fayllar hamı tərəfindən görünür</div>
         
         <div class="upload-section">
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">☁️</div>
                 <div class="upload-text">Faylları buraya atın və ya klikləyin</div>
-                <div class="upload-subtext">Bütün fayl növləri dəstəklənir</div>
+                <div class="upload-subtext">Bütün fayl növləri dəstəklənir • Fayllar hamı ilə paylaşılacaq</div>
                 <input type="file" id="fileInput" multiple>
             </div>
         </div>
 
         <div class="files-section">
             <div class="files-header">
-                <h2>Yüklənmiş Fayllar</h2>
-                <div class="files-count" id="filesCount">0 fayl</div>
+                <h2>Bütün Fayllar</h2>
+                <div class="header-right">
+                    <button class="refresh-btn" onclick="loadFiles()">🔄 Yenilə</button>
+                    <div class="files-count" id="filesCount">0 fayl</div>
+                </div>
             </div>
             <div class="files-grid" id="filesGrid">
-                <div class="empty-state">
-                    <div class="empty-state-icon">📂</div>
-                    <div class="empty-state-text">Hələ heç bir fayl yüklənməyib</div>
-                </div>
+                <div class="loading">Fayllar yüklənir...</div>
             </div>
         </div>
     </div>
 
     <script>
-        let files = [];
+        let currentUser = localStorage.getItem('userName');
+        if (!currentUser) {
+            currentUser = prompt('Adınızı daxil edin:') || 'Anonim İstifadəçi';
+            localStorage.setItem('userName', currentUser);
+        }
 
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const filesGrid = document.getElementById('filesGrid');
         const filesCount = document.getElementById('filesCount');
 
-        // Click to upload
         uploadArea.addEventListener('click', () => fileInput.click());
 
-        // File input change
         fileInput.addEventListener('change', (e) => {
             handleFiles(e.target.files);
         });
 
-        // Drag and drop
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             uploadArea.classList.add('dragover');
@@ -274,48 +342,136 @@
             handleFiles(e.dataTransfer.files);
         });
 
-        function handleFiles(fileList) {
+        async function handleFiles(fileList) {
             for (let file of fileList) {
-                const fileData = {
-                    id: Date.now() + Math.random(),
-                    name: file.name,
-                    size: file.size,
-                    type: file.type,
-                    date: new Date().toLocaleDateString('az-AZ'),
-                    file: file
-                };
-                files.push(fileData);
+                await uploadFile(file);
             }
-            renderFiles();
+            await loadFiles();
+        }
+
+        async function uploadFile(file) {
+            try {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const fileData = {
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                        uploader: currentUser,
+                        date: new Date().toLocaleDateString('az-AZ'),
+                        timestamp: Date.now(),
+                        data: e.target.result
+                    };
+
+                    const fileId = `file:${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    await window.storage.set(fileId, JSON.stringify(fileData), true);
+                    showNotification('✅ Fayl uğurla yükləndi: ' + file.name, 'success');
+                };
+                reader.readAsDataURL(file);
+            } catch (error) {
+                console.error('Upload error:', error);
+                showNotification('❌ Xəta: Fayl yüklənmədi', 'error');
+            }
+        }
+
+        async function loadFiles() {
+            try {
+                const result = await window.storage.list('file:', true);
+                
+                if (!result || !result.keys || result.keys.length === 0) {
+                    filesCount.textContent = '0 fayl';
+                    filesGrid.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📂</div>
+                            <div class="empty-state-text">Hələ heç bir fayl yüklənməyib</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const files = [];
+                for (let key of result.keys) {
+                    try {
+                        const fileResult = await window.storage.get(key, true);
+                        if (fileResult) {
+                            const fileData = JSON.parse(fileResult.value);
+                            files.push({ id: key, ...fileData });
+                        }
+                    } catch (e) {
+                        console.error('Error loading file:', key, e);
+                    }
+                }
+
+                files.sort((a, b) => b.timestamp - a.timestamp);
+
+                filesCount.textContent = `${files.length} fayl`;
+                
+                filesGrid.innerHTML = files.map(file => `
+                    <div class="file-card">
+                        <div class="file-icon">${getFileIcon(file.name)}</div>
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-uploader">👤 ${file.uploader}</div>
+                        <div class="file-info">Ölçü: ${formatFileSize(file.size)}</div>
+                        <div class="file-info">Tarix: ${file.date}</div>
+                        <div class="file-actions">
+                            <button class="btn btn-download" onclick='downloadFile(${JSON.stringify(file.id)}, ${JSON.stringify(file.name)}, ${JSON.stringify(file.data)})'>
+                                ⬇️ Yüklə
+                            </button>
+                            <button class="btn btn-delete" onclick='deleteFile(${JSON.stringify(file.id)})'>
+                                🗑️ Sil
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Load error:', error);
+                filesGrid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <div class="empty-state-text">Fayllar yüklənərkən xəta baş verdi</div>
+                    </div>
+                `;
+            }
+        }
+
+        function downloadFile(id, name, data) {
+            try {
+                const a = document.createElement('a');
+                a.href = data;
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showNotification('✅ Fayl endirilir: ' + name, 'success');
+            } catch (error) {
+                console.error('Download error:', error);
+                showNotification('❌ Endirmə xətası', 'error');
+            }
+        }
+
+        async function deleteFile(id) {
+            if (confirm('Bu faylı silmək istədiyinizdən əminsiniz?')) {
+                try {
+                    await window.storage.delete(id, true);
+                    showNotification('✅ Fayl silindi', 'success');
+                    await loadFiles();
+                } catch (error) {
+                    console.error('Delete error:', error);
+                    showNotification('❌ Silmə xətası', 'error');
+                }
+            }
         }
 
         function getFileIcon(filename) {
             const ext = filename.split('.').pop().toLowerCase();
             const icons = {
-                'pdf': '📄',
-                'doc': '📝',
-                'docx': '📝',
-                'txt': '📝',
-                'xls': '📊',
-                'xlsx': '📊',
-                'ppt': '📊',
-                'pptx': '📊',
-                'zip': '🗜️',
-                'rar': '🗜️',
-                'jpg': '🖼️',
-                'jpeg': '🖼️',
-                'png': '🖼️',
-                'gif': '🖼️',
-                'mp4': '🎥',
-                'avi': '🎥',
-                'mov': '🎥',
-                'mp3': '🎵',
-                'wav': '🎵',
-                'html': '🌐',
-                'css': '🎨',
-                'js': '⚙️',
-                'json': '⚙️',
-                'xml': '⚙️'
+                'pdf': '📄', 'doc': '📝', 'docx': '📝', 'txt': '📝',
+                'xls': '📊', 'xlsx': '📊', 'ppt': '📊', 'pptx': '📊',
+                'zip': '🗜️', 'rar': '🗜️', '7z': '🗜️',
+                'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'bmp': '🖼️',
+                'mp4': '🎥', 'avi': '🎥', 'mov': '🎥', 'mkv': '🎥',
+                'mp3': '🎵', 'wav': '🎵', 'flac': '🎵',
+                'html': '🌐', 'css': '🎨', 'js': '⚙️', 'json': '⚙️', 'xml': '⚙️'
             };
             return icons[ext] || '📎';
         }
@@ -328,58 +484,23 @@
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
 
-        function downloadFile(id) {
-            const fileData = files.find(f => f.id === id);
-            if (fileData) {
-                const url = URL.createObjectURL(fileData.file);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileData.name;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
         }
 
-        function deleteFile(id) {
-            files = files.filter(f => f.id !== id);
-            renderFiles();
-        }
+        // İlk yükləmə
+        loadFiles();
 
-        function renderFiles() {
-            filesCount.textContent = `${files.length} fayl`;
-            
-            if (files.length === 0) {
-                filesGrid.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📂</div>
-                        <div class="empty-state-text">Hələ heç bir fayl yüklənməyib</div>
-                    </div>
-                `;
-                return;
-            }
-
-            filesGrid.innerHTML = files.map(file => `
-                <div class="file-card">
-                    <div class="file-icon">${getFileIcon(file.name)}</div>
-                    <div class="file-name">${file.name}</div>
-                    <div class="file-info">Ölçü: ${formatFileSize(file.size)}</div>
-                    <div class="file-info">Tarix: ${file.date}</div>
-                    <div class="file-actions">
-                        <button class="btn btn-download" onclick="downloadFile(${file.id})">
-                            ⬇️ Yüklə
-                        </button>
-                        <button class="btn btn-delete" onclick="deleteFile(${file.id})">
-                            🗑️ Sil
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // Initial render
-        renderFiles();
+        // Hər 10 saniyədə bir avtomatik yeniləmə
+        setInterval(loadFiles, 10000);
     </script>
 </body>
 </html>
